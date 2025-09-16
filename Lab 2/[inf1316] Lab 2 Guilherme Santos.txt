@@ -1,0 +1,303 @@
+[INF1316] Lab 1 - Guilherme Santos Marques 2211288
+
+1) Soma de matrizes
+Faça um programa para somar matrizes de acordo
+com o seguinte algoritmo
+. O primeiro processo irá criar duas matrizes
+preenchidas e uma terceira vazia em 3 áreas de
+memória compartilhada.
+. Para cada linha da matriz solução, o seu
+programa deverá gerar um processo para o seu
+cálculo. 
+
+#include <sys/shm.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+void soma(int ini, int fim, int *p1, int *p2, int *p3){
+    int i;
+    for(i=ini;i<fim;i++){
+        p3[i] = p1[i] + p2[i];
+    }
+}
+
+int main (int argc, char *argv[]) 
+{
+    int segmento1, segmento2, segmento3, *p1, *p2, *p3, id, pid, status, i;
+    
+    segmento1 = shmget (IPC_PRIVATE, 9 * sizeof (int), IPC_CREAT | IPC_EXC.| S_IRUSR | S_IWUSR);
+    segmento2 = shmget (IPC_PRIVATE, 9 * sizeof (int), IPC_CREAT | IPC_EXC.| S_IRUSR | S_IWUSR);
+    segmento3 = shmget (IPC_PRIVATE, 9 * sizeof (int), IPC_CREAT | IPC_EXC.| S_IRUSR | S_IWUSR);
+    
+    p1 = (int *) shmat (segmento1, 0, 0);
+    p2 = (int *) shmat (segmento2, 0, 0);
+    p3 = (int *) shmat (segmento3, 0, 0);
+
+    for(i=0;i<9;i++)
+    {
+        p1[i] = i;
+        p2[i] = i;
+        p3[i] = 0;
+    }
+    
+    for(i=0;i<3;i++)
+    {
+        if ((id = fork()) < 0) 
+        {
+            printf("Erro na criação do novo processo");
+            exit (-2);
+        }
+        else if (id == 0) //filho
+        {
+            soma(i*3,(i+1)*3, p1, p2, p3);
+            sleep(1);
+            return 0; // final
+        }
+        else //pai
+            pid = wait (&status);
+    }
+    
+    puts("Matriz:");
+
+    for(i=0;i<3;i++) //print da terceira matriz após somatório
+    {
+        printf("%d %d %d \n", p3[3*i], p3[3*i+1], p3[3*i+2] );
+    }
+    
+    // libera a memória compartilhada do processo
+    shmdt (p1);
+    shmdt (p2);
+    shmdt (p3);
+    
+    // libera a memória compartilhada
+    shmct.(segmento1, IPC_RMID, 0);
+    shmct.(segmento2, IPC_RMID, 0);
+    shmct.(segmento3, IPC_RMID, 0);
+     
+    return 0; 
+}
+
+Comandos no terminal:
+
+cd SistemasOperacionais
+cd Lab 2
+gcc -o main main.c
+./main
+
+Saída
+
+Matriz:
+0 2 4 
+6 8 10 
+12 14 16 
+[1] + Done 
+
+O resultado obtivo vai de acordo com o esperado, foi utilizado um loop para a criação das matrizes, assim 
+elas se mantiveram iguais, sendo constituidas pelos números de 0 a 8. Sendo assim, a matriz resultante foi
+uma matriz de soma de iguais, 0+0 até 8+8
+
+2) Mensagem do Dia
+.Faça um programa que:
+.Leia uma mensagem do dia do stdin (ou arquivo)
+.Crie uma memória compartilhada com a chave
+8752
+.Salve a mensagem na memória
+.Faça um outro programa “cliente” que utilize
+a mesma chave (8752) e exiba a mensagem
+do dia para o usuário 
+
+
+#include <sys/shm.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+int main(void) 
+{
+    int segmento;
+    char * p;
+    
+    segmento = shmget(8752, 30*sizeof (char), IPC_CREAT | S_IRUSR |  S_IWUSR);
+    p = (char*) shmat(segmento, 0, 0);
+    
+    puts("Mensagem do dia:");
+    fgets(p, 30, stdin);
+    
+    return 0;
+}
+
+Programa cliente:
+
+#include <sys/shm.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+int main(void) 
+{
+    int segmento;
+    char * p;
+    
+    segmento = shmget (8752, 30 * sizeof(char), IPC_EXC.| S_IRUSR |  S_IWUSR);
+    p = (char*) shmat(segmento, 0, 0);
+    
+    printf("A mensagem do dia é: %s\n", p);
+    
+    shmdt(p);
+    shmctl(segmento, IPC_RMID, 0);
+    
+    return 0;
+}
+
+Comandos no terminal:
+
+cd SistemasOperacionais
+cd Lab 2
+gcc -o ex2 ex2.c
+./ex2
+gcc -o ex2_2 ex2_2.c
+./ex2_2
+
+Saída:
+
+A mensagem do dia é: bom dia
+[1] + Done 
+
+Os programs utilizam a memória compartilhada para para passar mensagens, o primeiro guarda uma mensagem
+recebida no fgets, e o segundo programa imprime essa mensagem. Uma chave e necessária para possibilitar
+essa troca de informações que utiliza a memória compartilhada, a chave utilizada foi 8752
+A mensagem de teste utilizada foi "bom dia".
+
+3) Busca paralela em vetor
+.Faça um programa paralelo (com pelo menos
+4 processos) para localizar uma chave em
+um vetor.
+.Crie uma memória compartilhada com dados
+numéricos inteiros e desordenados e a divida
+pelo número de processos
+.Cada processo deve procurar o dado na sua área
+de memória e informar a posição onde o dado foi
+localizado. 
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <sys/wait.h>
+
+
+void buscarChave(int *vetor, int ini, int fim, int chave, int id) {
+    for (int i = ini; i < fim; i++) {
+        if (vetor[i] == chave) {
+            printf("Processo %d encontrou a chave %d na posição %d.\n", id, chave, i);
+            exit(0);
+        }
+    }
+    printf("Processo %d não encontrou a chave %d.\n", id, chave);
+    exit(0);
+}
+
+int main() 
+{
+    int shm_size = 20 * sizeof(int);
+
+    int shmid = shmget(8752, shm_size, 0666 | IPC_CREAT);
+
+    int *vetor = (int *)shmat(shmid, NULL, 0);
+
+    for (int i = 0; i < 20; i++) 
+    {
+        vetor[i] = rand() % 50; // Números aleatórios entre 0 e 49
+        printf("%d ", vetor[i]);
+    }
+    printf("\n");
+
+    int chave;
+    printf("Digite a chave a ser buscada: ");
+    scanf("%d", &chave);
+
+    int parte = 20 / 4;
+
+    // Criação dos processos
+    for (int i = 0; i < 4; i++) {
+        pid_t pid = fork();
+        
+        if (pid == 0) 
+        { // Processo filho
+            int inicio = i * parte;
+            int fim = inicio + parte; // Define o fim padrão para cada processo
+
+            if (i == 4 - 1) // Se for o último processo, ajuste para cobrir até o fim do vetor
+                fim = 20;
+            buscarChave(vetor, inicio, fim, chave, i + 1);
+
+        } 
+        
+        else if (pid < 0) 
+        { // Erro ao criar processo
+            perror("Erro ao criar processo");
+            exit(1);
+        }
+    }
+
+    for (int i = 0; i < 4; i++) 
+    {
+        wait(NULL);
+    }
+
+    shmdt(vetor);
+    shmctl(shmid, IPC_RMID, NULL);
+
+    return 0;
+}
+
+
+Comandos no terminal:
+
+cd SistemasOperacionais
+cd Lab 2
+gcc -o ex3 ex3.c
+./ex3
+
+
+Saída:
+
+36 29 14 35 48 37 10 45 28 22 31 9 2 2 17 22 29 33 39 23 
+Digite a chave a ser buscada: 37
+Processo 1 não encontrou a chave 37.
+Processo 2 encontrou a chave 37 na posição 5.
+Processo 3 não encontrou a chave 37.
+Processo 4 não encontrou a chave 37.
+[1] + Done
+
+Exercicio em que encontrei mais dificuldade. Acredito que mesmo rodando, não esteja perfeita, tive que 
+utilizar loop para percorrer o vetor aos poucos, diminuindo sua eficiencia 
+Criei uma função de busca que para percorrer o vetor comparando com a chave selecionada. Em seguida a main
+cria um vetor de 20 numeros aleatórios que são divididos em 4 partes iguais que funcionarão como processos 
+paralelos (filhos) com fork(), e cada um busca a chave na sua parte do vetor.
+
+
+4) Multiplicação multi-processo
+Faça um programa que:
+.Tenha um processo pai que abre dois blocos de
+memória compartilhada, m1 e m2.
+.cria dois processos filho (use exec), P1 e P2: estes
+também fazem attach em m1 ou m2 respectivamente
+.Cada um dá um sleep() randômico e escreve um valor
+int na área compartilhada dele, e avisa o processo pai
+que um novo valor foi gerado, escrevendo tb um nr de
+sequencia
+.O pai fica em loop verificando se houve um novo valor.
+Apenas quando ambos P1 e P2 geraram um novo valor,
+o pai imprime o produto dos valores gerados por P1 e
+P2
+
+Não consegui realizar o Exercicio e tirarei minhas duvidas em sala de aula.
